@@ -1,0 +1,18 @@
+<?php
+/**
+ * @category   design
+ * @package    rwd_vapeworld
+ * @copyright  Copyright (c) 2016 Oro Inc. DBA MageCore (http://www.magecore.com)
+ */
+
+/**
+ * @var $this Oro_Ajax_Block_Placeholder
+ */
+?>
+<a href="<?php echo $this->helper('checkout/cart')->getCartUrl(); ?>" data-target-element="#header-cart" class="skip-link skip-cart no-count">
+    <span class="icon"></span>
+    <span class="label"><?php echo $this->__('Cart'); ?></span>
+    <span class="count">0</span>
+</a>
+<div id="header-cart" class="block block-cart skip-content">
+</div>

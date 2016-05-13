@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * @category   Oro
+ * @package    Oro_Ajax
+ * @copyright  Copyright (c) 2016 Oro Inc. DBA MageCore (http://www.magecore.com)
+ */
+-->
+<config>
+    <modules>
+        <Oro_Ajax>
+            <active>true</active>
+            <codePool>local</codePool>
+            <depends>
+                <Mage_Checkout/>
+                <Mage_Wishlist/>
+            </depends>
+        </Oro_Ajax>
+    </modules>
+</config>

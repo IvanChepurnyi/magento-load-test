@@ -1,0 +1,33 @@
+/**
+ * @category   skin
+ * @package    base_default
+ * @copyright  Copyright (c) 2016 Oro Inc. DBA MageCore (http://www.magecore.com)
+ */
+#ajax-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: #fff;
+    -moz-opacity: .6;
+    -webkit-opacity: .6;
+    -ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=60)"; /*IE8*/
+    opacity: .6;
+    z-index: 9999;
+}
+#ajax-loader {
+    position: absolute;
+    width: 200px;
+    height: auto;
+    background-color: #fff;
+    border: 1px #777 solid;
+    text-align: center;
+    padding: 10px;
+    z-index: 10000;
+}
+#ajax-loader .img {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 4px;
+    background: url("../../images/ajax-loader.gif");
+}
