@@ -48,6 +48,11 @@ $ JAVA_OPTS="-Ddomain=www.mXce.com -Dusers=10"
 $ gatling -s mX.defaultFrontTest
 ```
 
+## Magento1 Pre Test Setup
+
+1. Install Phoenix_VarnishCache extension
+2. Install Oro_Ajax module from ``magento1/ajax`` directory
+
 ## Magento2 Pre Test Setup
 
 1. Page load time optimization: build JS, enable JS minification, enable CSS minification

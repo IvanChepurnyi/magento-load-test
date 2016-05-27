@@ -1,0 +1,19 @@
+<?php
+/**
+ * @category   design
+ * @package    base_default
+ * @copyright  Copyright (c) 2016 Oro Inc. DBA MageCore (http://www.magecore.com)
+ */
+
+/**
+ * @var $this Oro_Ajax_Block_Header
+ */
+?>
+<script type="text/javascript">
+var ajaxController = new oroAjax({
+    formKey: '<?php echo $this->jsQuoteEscape($this->getFormKey()); ?>',
+    statusUrl: '<?php echo $this->jsQuoteEscape($this->getStatusUrl()); ?>',
+    updaters: <?php echo $this->getUpdatersJson(); ?>
+});
+var ajaxCart = new oroAjaxCart(ajaxController, '<?php echo Mage::helper('oro_ajax/cart')->getUrlTemplate(); ?>');
+</script>

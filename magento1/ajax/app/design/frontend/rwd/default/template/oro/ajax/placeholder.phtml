@@ -1,0 +1,18 @@
+<?php
+/**
+ * @category   design
+ * @package    base_default
+ * @copyright  Copyright (c) 2016 Oro Inc. DBA MageCore (http://www.magecore.com)
+ */
+
+/**
+ * @var $this Oro_Ajax_Block_Placeholder
+ */
+
+$tag        = $this->getElementTag();
+$attributes = $this->getElementAttributes();
+$content    = $this->getElementContent();
+?>
+<?php if ($tag): ?>
+    <<?php echo $tag;?> <?php echo $attributes; ?>><?php echo $content; ?></<?php echo $tag;?>>
+<?php endif; ?>

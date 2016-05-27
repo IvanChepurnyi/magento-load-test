@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+/**
+ * @category   design
+ * @package    rwd_vapeworld
+ * @copyright  Copyright (c) 2016 Oro Inc. DBA MageCore (http://www.magecore.com)
+ */
+-->
+<layout>
+    <default>
+        <reference name="head">
+            <action method="addItem">
+                <type>skin_js</type>
+                <name>js/oro/ajax.js</name>
+                <params/>
+            </action>
+            <action method="addItem">
+                <type>skin_css</type>
+                <name>css/oro/ajax.css</name>
+                <params/>
+            </action>
+        </reference>
+        <reference name="after_body_start">
+            <block type="oro_ajax/header" name="oro_ajax_header" template="oro/ajax/header.phtml">
+                <action method="registerPlaceholder">
+                    <xpath>block[@name="global_messages"]</xpath>
+                    <placeholder>
+                        <callback>oro_ajax::isCacheContent</callback>
+                        <block>oro_ajax/placeholder_messages</block>
+                        <id>global-messages-placeholder</id>
+                    </placeholder>
+                    <updater>
+                        <key>global_messages</key>
+                        <rule>
+                            <id>global-messages-placeholder</id>
+                        </rule>
+                    </updater>
+                </action>
+                <action method="registerPlaceholder">
+                    <xpath>block[@name="messages"]</xpath>
+                    <placeholder>
+                        <callback>oro_ajax::isCacheContent</callback>
+                        <block>oro_ajax/placeholder_messages</block>
+                        <id>messages-placeholder</id>
+                    </placeholder>
+                    <updater>
+                        <key>messages</key>
+                        <rule>
+                            <id>messages-placeholder</id>
+                        </rule>
+                    </updater>
+                </action>
+                <action method="registerPlaceholder">
+                    <xpath>block[@name="minicart_head"]</xpath>
+                    <placeholder>
+                        <template>oro/ajax/placeholder/minicart.phtml</template>
+                    </placeholder>
+                    <updater>
+                        <key>top_cart</key>
+                        <rule>
+                            <css>div.header-minicart</css>
+                        </rule>
+                    </updater>
+                </action>
+                <action method="registerPlaceholder">
+                    <xpath/>
+                    <placeholder/>
+                    <updater>
+                        <key>ajax_top_links</key>
+                        <rule>
+                            <css>#header div.links</css>
+                            <replace>1</replace>
+                        </rule>
+                    </updater>
+                </action>
+            </block>
+        </reference>
+        <remove name="varnishcache.cookie_environment"/>
+        <remove name="varnishcache.cookie_formkey"/>
+    </default>
+
+    <oro_ajax_response>
+        <block type="oro_ajax/response" name="root">
+            <block type="checkout/cart_minicart" name="top_cart" template="checkout/cart/minicart.phtml">
+                <block type="checkout/cart_sidebar" name="minicart_content" template="checkout/cart/minicart/items.phtml">
+                    <action method="addItemRender"><type>default</type><block>checkout/cart_item_renderer</block><template>checkout/cart/minicart/default.phtml</template></action>
+                    <action method="addItemRender"><type>simple</type><block>checkout/cart_item_renderer</block><template>checkout/cart/minicart/default.phtml</template></action>
+                    <action method="addItemRender"><type>grouped</type><block>checkout/cart_item_renderer_grouped</block><template>checkout/cart/minicart/default.phtml</template></action>
+                    <action method="addItemRender"><type>configurable</type><block>checkout/cart_item_renderer_configurable</block><template>checkout/cart/minicart/default.phtml</template></action>
+                    <action method="addItemRender"><type>downloadable</type><block>downloadable/checkout_cart_item_renderer</block><template>downloadable/checkout/cart/item/default.phtml</template></action>
+                    <action method="addItemRender"><type>bundle</type><block>bundle/checkout_cart_item_renderer</block><template>checkout/cart/sidebar/default.phtml</template></action>
+
+                    <block type="core/text_list" name="cart_sidebar.cart_promotion" as="cart_promotion" translate="label" module="checkout">
+                        <label>Mini-cart promotion block</label>
+                    </block>
+                    <block type="core/text_list" name="cart_sidebar.extra_actions" as="extra_actions" translate="label" module="checkout">
+                        <label>Shopping Cart Sidebar Extra Actions</label>
+                    </block>
+                </block>
+            </block>
+            <action method="add">
+                <key>top_cart</key>
+                <block>top_cart</block>
+            </action>
+            <block type="core/messages" name="global_messages" response_key="global_messages"/>
+            <action method="add">
+                <key>global_messages</key>
+                <block>global_messages</block>
+            </action>
+            <block type="core/messages" name="messages" response_key="messages"/>
+            <action method="add">
+                <key>messages</key>
+                <block>messages</block>
+            </action>
+            <block type="page/template_links" name="ajax_top_links">
+                <action method="addLink" translate="label title" module="customer"><label>My Account</label><url helper="customer/getAccountUrl"/><title>My Account</title><prepare/><urlParams/><position>10</position></action>
+                <!-- wishlist -->
+                <block type="wishlist/links" name="wishlist_link" />
+                <action method="addLinkBlock"><blockName>wishlist_link</blockName></action>
+                <!-- checkout -->
+                <block type="checkout/links" name="checkout_cart_link">
+                    <action method="addCartLink"/>
+                    <action method="addCheckoutLink"/>
+                </block>
+            </block>
+            <action method="add">
+                <key>ajax_top_links</key>
+                <block>ajax_top_links</block>
+            </action>
+        </block>
+    </oro_ajax_response>
+
+    <customer_logged_in>
+        <reference name="top.links">
+            <action method="removeLinkByUrl"><url helper="customer/getLogoutUrl"/></action>
+        </reference>
+        <reference name="ajax_top_links">
+            <action method="addLink" translate="label title" module="customer"><label>Log Out</label><url helper="customer/getLogoutUrl"/><title>Log Out</title><prepare/><urlParams/><position>100</position></action>
+        </reference>
+    </customer_logged_in>
+
+    <customer_logged_out>
+        <reference name="top.links">
+            <action method="removeLinkByUrl"><url helper="customer/getLoginUrl"/></action>
+            <action method="removeLinkByUrl"><url helper="customer/getRegisterUrl"/></action>
+        </reference>
+        <reference name="ajax_top_links">
+            <action method="addLink" translate="label title before_text" module="customer"><label>Register</label><url helper="customer/getRegisterUrl" /><title>Register</title><prepare/><urlParams/><position>100</position><li/><a/></action>
+            <action method="addLink" translate="label title" module="customer"><label>Log In</label><url helper="customer/getLoginUrl"/><title>Log In</title><prepare/><urlParams/><position>100</position></action>
+        </reference>
+    </customer_logged_out>
+
+    <catalog_category_default>
+        <reference name="oro_ajax_header">
+            <action method="setStatusUrlParam"><key>page</key><value>catalog_category</value></action>
+            <action method="setStatusUrlParam"><key>category</key><value helper="oro_ajax/getCurrentCatalogCategoryId"/></action>
+        </reference>
+    </catalog_category_default>
+    <catalog_category_layered>
+        <reference name="oro_ajax_header">
+            <action method="setStatusUrlParam"><key>page</key><value>catalog_category</value></action>
+            <action method="setStatusUrlParam"><key>category</key><value helper="oro_ajax/getCurrentCatalogCategoryId"/></action>
+        </reference>
+    </catalog_category_layered>
+    <catalog_product_view>
+        <reference name="oro_ajax_header">
+            <action method="setStatusUrlParam"><key>page</key><value>catalog_product</value></action>
+            <action method="setStatusUrlParam"><key>product</key><value helper="oro_ajax/getCurrentCatalogProductId"/></action>
+        </reference>
+    </catalog_product_view>
+    <checkout_cart_index>
+        <reference name="oro_ajax_header">
+            <action method="setStatusUrlParam"><key>page</key><value>checkout</value></action>
+            <action method="setStatusUrlParam"><key>page</key><value>checkout</value></action>
+        </reference>
+    </checkout_cart_index>
+    <checkout_onepage_index>
+        <reference name="oro_ajax_header">
+            <action method="setStatusUrlParam"><key>page</key><value>checkout</value></action>
+        </reference>
+    </checkout_onepage_index>
+</layout>
