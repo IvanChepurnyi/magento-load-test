@@ -450,8 +450,8 @@ class frontendLoadTest extends Simulation
       .during(nbDuring minutes) {
         randomSwitch(
           40d -> exec(group.abandonedCart),
-          20d -> exec(group.browseCatalog),
-          20d -> exec(group.browseLayer),
+          25d -> exec(group.browseCatalog),
+          25d -> exec(group.browseLayer),
           10d -> exec(group.checkoutGuest)
         )
       }

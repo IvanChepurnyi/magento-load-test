@@ -92,7 +92,6 @@ class frontendLoadTest extends Simulation
           .get("${protocol}://${domain}/customer/section/load/?sections="+sections+"&update_section_id=false&_=${rnd}")
           .header("X-Requested-With", "XMLHttpRequest")
           .check(status.is(200))
-          .check(jsonPath("$.cart"))
       )
     }
     def quoteJsonValue(value: String): String = {
@@ -318,9 +317,47 @@ class frontendLoadTest extends Simulation
             .check(status.is(200))
             .check(css("""#shopping-cart-table input[name^="cart"]""", "value").findAll.saveAs("cart_qty_values"))
             .check(css("""#shopping-cart-table input[name^="cart"]""", "name").findAll.saveAs("cart_qty_name"))
+            .check(regex(""""quoteData":\{"entity_id":"([^"]+)",""").saveAs("quoteEntityId"))
         )
-        .exec(ajax.loadSections("customer%2Ccompare-products%2Clast-ordered-items%2Ccart%2Cdirectory-data%2Cwishlist", true))
+        .exec(ajax.loadSections("directory-data", false))
       }
+      
+      def estimateShippingMethods(postcode: String, region: String, regionId: String) = {
+        exec(session => {
+          val payload = "{\"address\":{\"country_id\":\"US\",\"postcode\":" +
+            ajax.quoteJsonValue(postcode) + ",\"region\":" + ajax.quoteJsonValue(region) +
+            ",\"region_id\":" + ajax.quoteJsonValue(regionId) + "}}"
+          session.set("payload", payload)
+        })
+        .exec(
+          http("Shopping Cart: Estimate Shipping")
+            .post("${secure}://${domain}/rest/default/V1/guest-carts/${quoteEntityId}/estimate-shipping-methods")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Content-Type", "application/json")
+            .body(StringBody("""${payload}""")).asJSON
+            .check(status.is(200))
+            .check(jsonPath("$..carrier_code"))
+        )
+      }
+      
+      def totalsInformation(postcode: String, region: String, regionId: String) = {
+        exec(session => {
+          val payload = "{\"addressInformation\":{\"address\":{\"country_id\":\"US\",\"postcode\":" +
+            ajax.quoteJsonValue(postcode) + ",\"region\":" + ajax.quoteJsonValue(region) +
+            ",\"region_id\":" + ajax.quoteJsonValue(regionId) + "}, \"shipping_carrier_code\":\"flatrate\", \"shipping_method_code\":\"flatrate\"}}"
+          session.set("payload", payload)
+        })
+        .exec(
+          http("Shopping Cart: Totals Information")
+            .post("${secure}://${domain}/rest/default/V1/guest-carts/${quoteEntityId}/totals-information")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Content-Type", "application/json")
+            .body(StringBody("""${payload}""")).asJSON
+            .check(status.is(200))
+            .check(jsonPath("$.grand_total"))
+        )
+      }
+      
     }
 
     /**
@@ -445,7 +482,6 @@ class frontendLoadTest extends Simulation
     def abandonedCart = {
       exec(initSession)
       .exec(cms.homepage)
-      .exec(ajax.firstRequest)
       .pause(minPause, maxPause)
       .exec(catalog.category.view)
       .pause(minPause, maxPause)
@@ -454,12 +490,17 @@ class frontendLoadTest extends Simulation
       .exec(catalog.product.addConfigurable)
       .pause(minPause, maxPause)
       .exec(checkout.cart.view)
+      .pause(minPause, maxPause)
+      .exec(checkout.cart.totalsInformation("", "", "0"))
+      .pause(minPause, maxPause)
+      .exec(checkout.cart.estimateShippingMethods("","","0"))
+      .pause(minPause, maxPause)
+      .exec(checkout.cart.totalsInformation("", "", "0"))
     }
 
     def browseCatalog = {
       exec(initSession)
       .exec(cms.homepage)
-      .exec(ajax.firstRequest)
       .pause(minPause, maxPause)
       .exec(catalog.category.view)
       .pause(minPause, maxPause)
@@ -471,7 +512,6 @@ class frontendLoadTest extends Simulation
     def browseLayer = {
       exec(initSession)
         .exec(cms.homepage)
-        .exec(ajax.firstRequest)
         .pause(minPause, maxPause)
         .exec(catalog.category.view)
         .pause(minPause, maxPause)
@@ -485,7 +525,6 @@ class frontendLoadTest extends Simulation
     def checkoutGuest = {
       exec(initSession)
       .exec(cms.homepage)
-      .exec(ajax.firstRequest)
       .pause(minPause, maxPause)
       .exec(catalog.category.view)
       .pause(minPause, maxPause)
@@ -494,6 +533,12 @@ class frontendLoadTest extends Simulation
       .exec(catalog.product.addConfigurable)
       .pause(minPause, maxPause)
       .exec(checkout.cart.view)
+      .pause(minPause, maxPause)
+      .exec(checkout.cart.totalsInformation("", "", "0"))
+      .pause(minPause, maxPause)
+      .exec(checkout.cart.estimateShippingMethods("","","0"))
+      .pause(minPause, maxPause)
+      .exec(checkout.cart.totalsInformation("", "", "0"))
       .pause(minPause, maxPause)
       .exec(checkout.onepage.view)
       .exec(checkout.onepage.estimateShippingMethods("","","0"))
