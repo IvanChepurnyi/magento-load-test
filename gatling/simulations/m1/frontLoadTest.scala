@@ -1,5 +1,6 @@
 package m1
 
+import org.asynchttpclient.util.Base64
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import scala.concurrent.duration._
@@ -20,17 +21,46 @@ class frontendLoadTest extends Simulation
   val domain                  = System.getProperty("domain", "m1ce.magecore.com").toString
   val useSecure               = System.getProperty("useSecure", "0").toInt
   val projectName             = System.getProperty("project", "Magento CE 1.9.2.4").toString
+  val simpleProductCsv          = System.getProperty("simpleProductCsv", "product_simple").toString
   val scenarioSuffix          = " (" + nbUsers.toString + " users over " + nbRamp.toString + " sec during " + nbDuring.toString + " min)"
 
   val feedAddress             = csv(dataDir + "/address.csv").random
   val feedCustomer            = csv(dataDir + "/customer.csv").circular
   val feedCategory            = csv(dataDir + "/category.csv").random
   val feedLayer               = csv(dataDir + "/layer.csv").random
-  val feedProductSimple       = csv(dataDir + "/product_simple.csv").random
+  val feedProductSimple       = csv(dataDir + "/" + simpleProductCsv + ".csv").random
   val feedProductGrouped      = csv(dataDir + "/product_grouped.csv").random
   val feedProductConfigurable = csv(dataDir + "/product_configurable.csv").random
 
   val random                  = new java.util.Random
+
+
+  val majorityCartPercent = simpleProductCsv match {
+    case "product_simple_original" => 38d // In original set it is very likely that customer visits simple product
+    case "product_simple_large" => 25d // In large database chance of finding simple is lower
+    case _ => 20d // In default it is 50% chance to find configurable and simple products
+  }
+
+  val minorityCartPercent = simpleProductCsv match {
+    case "product_simple_original" => 2d // In original set it is very unlikely that customer visits configurable product
+    case "product_simple_large" => 15d // In large database chance of finding configurable is larger
+    case _ => 20d // In default it is 50% chance to find configurable and simple products
+  }
+
+  val majorityCheckoutPercent = simpleProductCsv match {
+    case "product_simple_original" => 9.5d // In original set it is very likely that customer checkouts simple product
+    case "product_simple_large" => 6d // In large database checking out simple is lower
+    case _ => 5d // In default it is 50% checkout chance of configurable and simple products
+  }
+
+  val minorityCheckoutPercent = simpleProductCsv match {
+    case "product_simple_original" => 0.5d // In original set it is very unlikely that customer checkouts configurable product
+    case "product_simple_large" => 4d // In large database chance of checking out configurable is larger
+    case _ => 5d  // In default it is 50% checkout chance of configurable and simple products
+  }
+
+  val minPause = 100 milliseconds
+  val maxPause = 500 milliseconds
 
   /**
     * Initializes new customer session
@@ -41,6 +71,12 @@ class frontendLoadTest extends Simulation
     .exec(session => session.set("suffix", ""))
     .exec(session => session.set("rnd", random.nextInt))
     .exec(session => session.set("is_customer", false))
+
+  val setBackUrl = exec(session => {
+    val url = session("url").as[String]
+    session.set("uenc", Base64.encode(s"http://${domain}/${url}".toCharArray.map(_.toByte)))
+  })
+
 
   /**
     * AJAX queries
@@ -58,6 +94,56 @@ class frontendLoadTest extends Simulation
           .check(status.is(200))
           .check(jsonPath("$.customer"))
           .check(jsonPath("$.form_key").saveAs("form_key"))
+      )
+    }
+
+    /**
+      * Reloads block by its name
+      *
+      * @param securePage
+      * @param block
+      */
+    def reloadBlockRequest(securePage: Boolean, block: String) = {
+      exec(session => {
+        session.set("protocol", if (securePage) { session("secure").as[String] } else { "http" })
+      })
+      .exec(
+        http("AJAX: Reload Dynamic Block")
+          .post("${protocol}://${domain}/varnish/ajax/reload/")
+          .header("X-Requested-With", "XMLHttpRequest")
+          .formParam("blocks", block)
+          .check(status.is(200))
+          .check(jsonPath("$." + block))
+      )
+    }
+
+    /**
+      * Sets a form key cookie and session variable
+      *
+      * @param securePage
+      */
+    def formkeyRequest(securePage: Boolean) = {
+      exec(session => {
+        session.set("protocol", if (securePage) { session("secure").as[String] } else { "http" })
+      })
+      .exec(
+        http("AJAX: Extract Form Key")
+          .get("${protocol}://${domain}/varnish/ajax/token/")
+          .header("X-Requested-With", "XMLHttpRequest")
+          .check(status.is(200))
+          .check(headerRegex("Set-Cookie", """varnish_token=([^;]+)""").saveAs("form_key"))
+      )
+    }
+
+    def messagesRequest(securePage: Boolean, storage: String) = {
+      exec(session => {
+        session.set("protocol", if (securePage) { session("secure").as[String] } else { "http" })
+      })
+      .exec(
+        http("AJAX: Session Messages")
+          .get("${protocol}://${domain}/varnish/ajax/message/")
+          .header("X-Requested-With", "XMLHttpRequest")
+          .check(status.is(200))
       )
     }
   }
@@ -92,20 +178,27 @@ class frontendLoadTest extends Simulation
             .check(status.is(200))
             .check(regex("<div class=\"product-name\">"))
         )
-        .exec(ajax.statusRequest(false, "catalog_product/product/${product_id}"))
+        .pause(minPause, maxPause)
+        .exec(ajax.formkeyRequest(false))
+        .exec(setBackUrl)
       }
       def addSimple = {
         exec(viewSimple)
         .exec(
           http("Add Product to Cart: Simple")
-            .post("http://${domain}/ajax/cart/add/")
-            .header("X-Requested-With", "XMLHttpRequest")
+            .post("http://${domain}/checkout/cart/add/uenc/${uenc}")
             .formParam( """product""", "${product_id}")
             .formParam( """form_key""", "${form_key}")
             .formParam( """qty""", "1")
-            .check(status.is(200))
-            .check(jsonPath("$.minicart_message"))
-          )
+            .check(status.is(302))
+            .check(header("Location").is("http://${domain}/checkout/cart/"))
+        )
+        // After adding to the shopping cart
+        // We are redirected to shopping cart page
+        .exec(checkout.cart.view)
+        .pause(minPause, maxPause)
+        .exec(ajax.messagesRequest(false, "checkout"))
+        .exec(ajax.reloadBlockRequest(false, "minicart_head"))
       }
 
       /**
@@ -119,17 +212,18 @@ class frontendLoadTest extends Simulation
             .check(status.is(200))
             .check(regex("<div class=\"product-name\">"))
         )
-        .exec(ajax.statusRequest(false, "catalog_product/product/${product_id}"))
+        .pause(minPause, maxPause)
+        .exec(ajax.formkeyRequest(false))
+        .exec(setBackUrl)
       }
       def addGrouped = {
         exec(viewGrouped)
         .exec(
           http("Add Product to Cart: Grouped")
-            .post("http://${domain}/ajax/cart/add/")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .formParam("""product""", "${product_id}")
-            .formParam("""form_key""", "${form_key}")
-            .formParam("""qty""", "1")
+            .post("http://${domain}/checkout/cart/add/uenc/${uenc}/")
+            .formParam( """product""", "${product_id}")
+            .formParam( """form_key""", "${form_key}")
+            .formParam( """qty""", "1")
             .formParamMap(session => {
               val children = session("children").as[String].split(",")
               val childId  = children(random.nextInt(children.length))
@@ -138,9 +232,15 @@ class frontendLoadTest extends Simulation
               val result   = (keys zip values).toMap
               result
             })
-            .check(status.is(200))
-            .check(jsonPath("$.minicart_message"))
-        )
+            .check(status.is(302))
+            .check(header("Location").is("http://${domain}/checkout/cart/"))
+          )
+          // After adding to the shopping cart
+          // We are redirected to shopping cart page
+          .exec(checkout.cart.view)
+          .pause(minPause, maxPause)
+          .exec(ajax.messagesRequest(false, "checkout"))
+          .exec(ajax.reloadBlockRequest(false, "minicart_head"))
       }
 
       /**
@@ -154,15 +254,16 @@ class frontendLoadTest extends Simulation
             .check(status.is(200))
             .check(regex("<div class=\"product-name\">"))
         )
-        .exec(ajax.statusRequest(false, "catalog_product/product/${product_id}"))
+        .pause(minPause, maxPause)
+        .exec(ajax.formkeyRequest(false))
+        .exec(setBackUrl)
       }
 
       def addConfigurable = {
         exec(viewConfigurable)
         .exec(
           http("Add Product to Cart: Configurable")
-            .post("http://${domain}/ajax/cart/add/")
-            .header("X-Requested-With", "XMLHttpRequest")
+            .post("http://${domain}/checkout/cart/add/uenc/${uenc}/")
             .formParam( """product""", "${product_id}")
             .formParam( """form_key""", "${form_key}")
             .formParam( """qty""", "1")
@@ -172,9 +273,15 @@ class frontendLoadTest extends Simulation
               val result = (keys zip values).toMap
               result
             })
-            .check(status.is(200))
-            .check(jsonPath("$.minicart_message"))
-        )
+            .check(status.is(302))
+            .check(header("Location").is("http://${domain}/checkout/cart/"))
+          )
+          // After adding to the shopping cart
+          // We are redirected to shopping cart page
+          .exec(checkout.cart.view)
+          .pause(minPause, maxPause)
+          .exec(ajax.messagesRequest(false, "checkout"))
+          .exec(ajax.reloadBlockRequest(false, "minicart_head"))
       }
     }
     object category {
@@ -185,8 +292,17 @@ class frontendLoadTest extends Simulation
             .get("http://${domain}/${url}")
             .check(status.is(200))
             .check(regex("""page-title category-title"""))
+            .check(currentLocation.saveAs("categoryUrl"))
         )
-        .exec(ajax.statusRequest(false, "catalog_category/category/${category_id}"))
+      }
+
+      def back = {
+          exec(
+            http("Category Page")
+              .get("${categoryUrl}")
+              .check(status.is(200))
+              .check(regex("""page-title category-title"""))
+          )
       }
 
       def layer = {
@@ -196,8 +312,8 @@ class frontendLoadTest extends Simulation
             .get("http://${domain}/${url}?${attribute}=${option}")
             .check(status.is(200))
             .check(regex(""">Remove This Item</""").find(0).exists)
+            .check(currentLocation.saveAs("categoryUrl"))
         )
-        .exec(ajax.statusRequest(false, "catalog_category/category/${category_id}"))
       }
     }
   }
@@ -259,7 +375,6 @@ class frontendLoadTest extends Simulation
             .check(css( """#shopping-cart-table input[name^="cart"]""", "value").findAll.saveAs("cart_qty_values"))
             .check(css( """#shopping-cart-table input[name^="cart"]""", "name").findAll.saveAs("cart_qty_name"))
         )
-        .exec(ajax.statusRequest(false, "checkout"))
       }
     }
 
@@ -347,7 +462,9 @@ class frontendLoadTest extends Simulation
             .get("${secure}://${domain}/checkout/onepage/success/")
             .check(status.is(200))
         )
-        .exec(ajax.statusRequest(true, "checkout"))
+        .pause(minPause, maxPause)
+        .exec(ajax.messagesRequest(false, "checkout"))
+        .exec(ajax.reloadBlockRequest(false, "minicart_head"))
       }
 
       /**
@@ -362,7 +479,6 @@ class frontendLoadTest extends Simulation
             .get("${secure}://${domain}/checkout/onepage/")
             .check(status.is(200))
         )
-        .exec(ajax.statusRequest(true, "checkout"))
         .pause(minPause, maxPause)
         .exec(setCheckoutMethod("guest"))
         .exec(progress("billing"))
@@ -382,63 +498,94 @@ class frontendLoadTest extends Simulation
     }
   }
 
+  object catalogBehaviour
+  {
+    def browseCategory = {
+      exec(initSession)
+        .exec(cms.homepage)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.view)
+    }
+
+    def browseCatalog = {
+      exec(browseCategory)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewConfigurable)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.back)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewSimple)
+    }
+
+    def browseLayer = {
+      exec(browseCategory)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.layer)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewConfigurable)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.back)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewSimple)
+    }
+  }
+
   /**
     * Customer behaviors
     */
-  object group {
-    def minPause = 100 milliseconds
-    def maxPause = 500 milliseconds
+  object checkoutBehaviour {
 
-    def abandonedCart = {
+    def abandonedCartSimpleAndConfigurable = {
       exec(initSession)
         .exec(cms.homepage)
         .pause(minPause, maxPause)
         .exec(catalog.category.view)
         .pause(minPause, maxPause)
         .exec(catalog.product.addSimple)
+        // In order to add second product
+        // a user must go to a category page,
+        // as he stays in shopping cart
+        .pause(minPause, maxPause)
+        .exec(catalog.category.back)
         .pause(minPause, maxPause)
         .exec(catalog.product.addConfigurable)
-        .pause(minPause, maxPause)
-        .exec(checkout.cart.view)
     }
 
-    def browseCatalog = {
+    def abandonedCartTwoSimples = {
       exec(initSession)
         .exec(cms.homepage)
         .pause(minPause, maxPause)
         .exec(catalog.category.view)
         .pause(minPause, maxPause)
-        .exec(catalog.product.viewSimple)
+        .exec(catalog.product.addSimple)
+        // In order to add second product
+        // a user must go to a category page,
+        // as he stays in shopping cart
         .pause(minPause, maxPause)
-        .exec(catalog.product.viewConfigurable)
+        .exec(catalog.category.back)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.addSimple)
     }
 
-    def browseLayer = {
-      exec(initSession)
-        .exec(cms.homepage)
-        .pause(minPause, maxPause)
-        .exec(catalog.category.view)
-        .pause(minPause, maxPause)
-        .exec(catalog.category.layer)
-        .pause(minPause, maxPause)
-        .exec(catalog.product.viewSimple)
-        .pause(minPause, maxPause)
-        .exec(catalog.product.viewConfigurable)
+
+    def abandonedCartMajority = {
+      abandonedCartTwoSimples
     }
 
-    def checkoutGuest = {
-      exec(initSession)
-      .exec(cms.homepage)
-      .pause(minPause, maxPause)
-      .exec(catalog.category.view)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.addSimple)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.addConfigurable)
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.view)
-      .pause(minPause, maxPause)
-      .exec(checkout.onepage.asGuest(minPause, maxPause))
+    def abandonedCartMinority = {
+      abandonedCartSimpleAndConfigurable
+    }
+
+    def checkoutGuestMajority = {
+      exec(abandonedCartMajority)
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.asGuest(minPause, maxPause))
+    }
+
+    def checkoutGuestMinority = {
+      exec(abandonedCartMinority)
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.asGuest(minPause, maxPause))
     }
   }
 
@@ -449,10 +596,12 @@ class frontendLoadTest extends Simulation
     def default = scenario(projectName + " Load Test" + scenarioSuffix)
       .during(nbDuring minutes) {
         randomSwitch(
-          40d -> exec(group.abandonedCart),
-          25d -> exec(group.browseCatalog),
-          25d -> exec(group.browseLayer),
-          10d -> exec(group.checkoutGuest)
+          minorityCartPercent -> exec(checkoutBehaviour.abandonedCartMinority),
+          majorityCartPercent -> exec(checkoutBehaviour.abandonedCartMajority),
+          25d -> exec(catalogBehaviour.browseCatalog),
+          25d -> exec(catalogBehaviour.browseLayer),
+          minorityCheckoutPercent -> exec(checkoutBehaviour.checkoutGuestMinority),
+          majorityCheckoutPercent -> exec(checkoutBehaviour.checkoutGuestMajority)
         )
       }
   }

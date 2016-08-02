@@ -19,21 +19,66 @@ class frontendLoadTest extends Simulation
   val nbDuring                = System.getProperty("during", "10").toInt
   val domain                  = System.getProperty("domain", "m2ce.magecore.com").toString
   val useSecure               = System.getProperty("useSecure", "0").toInt
-  val projectName             = System.getProperty("project", "Magento 2.0.4 CE").toString
+  val magentoVersion          = System.getProperty("magentoVersion", "2.0.7").toString
+
+  val isAjaxReviewRandomParam = magentoVersion match {
+    case "2.0.0" => true
+    case "2.0.1" => true
+    case "2.0.2" => true
+    case "2.0.3" => true
+    case "2.0.4" => true
+    case "2.0.5" => true
+    case "2.0.6" => true
+    case "2.0.7" => true
+    case _ => false
+  }
+
+  val simpleProductCsv        = System.getProperty("simpleProductCsv", "product_simple").toString
+  val projectName             = System.getProperty("project", "Magento " + magentoVersion + " CE " + simpleProductCsv ).toString
+  val executeAjaxReview       = System.getProperty("ajaxReview", "1").toInt
   val scenarioSuffix          = " (" + nbUsers.toString + " users over " + nbRamp.toString + " sec during " + nbDuring.toString + " min)"
 
   val feedAddress             = csv(dataDir + "/address.csv").random
   val feedCustomer            = csv(dataDir + "/customer.csv").circular
   val feedCategory            = csv(dataDir + "/category.csv").random
   val feedLayer               = csv(dataDir + "/layer.csv").random
-  val feedProductSimple       = csv(dataDir + "/product_simple.csv").random
+  val feedProductSimple       = csv(dataDir + "/" + simpleProductCsv + ".csv").random
   val feedProductGrouped      = csv(dataDir + "/product_grouped.csv").random
   val feedProductConfigurable = csv(dataDir + "/product_configurable.csv").random
 
   val random                  = new java.util.Random
 
+
+  val majorityCartPercent = simpleProductCsv match {
+    case "product_simple_original" => 38d // In original set it is very likely that customer visits simple product
+    case "product_simple_large" => 25d // In large database chance of finding simple is lower
+    case _ => 20d // In default it is 50% chance to find configurable and simple products
+  }
+
+  val minorityCartPercent = simpleProductCsv match {
+    case "product_simple_original" => 2d // In original set it is very unlikely that customer visits configurable product
+    case "product_simple_large" => 15d // In large database chance of finding configurable is larger
+    case _ => 20d // In default it is 50% chance to find configurable and simple products
+  }
+
+  val majorityCheckoutPercent = simpleProductCsv match {
+    case "product_simple_original" => 9.5d // In original set it is very likely that customer checkouts simple product
+    case "product_simple_large" => 6d // In large database checking out simple is lower
+    case _ => 5d // In default it is 50% checkout chance of configurable and simple products
+  }
+
+  val minorityCheckoutPercent = simpleProductCsv match {
+    case "product_simple_original" => 0.5d // In original set it is very unlikely that customer checkouts configurable product
+    case "product_simple_large" => 4d // In large database chance of checking out configurable is larger
+    case _ => 5d  // In default it is 50% checkout chance of configurable and simple products
+  }
+
+  val minPause = 100 milliseconds
+  val maxPause = 500 milliseconds
+
   /**
     * Generates Magento form_key
+    *
     * @return
     */
   def generateFormKey: String = {
@@ -126,12 +171,18 @@ class frontendLoadTest extends Simulation
   object catalog {
     object product {
       def reviewAjax(productId: String) = {
-        exec(
-          http("Product Page: Review AJAX")
-            .get("http://${domain}/review/product/listAjax/id/"+productId+"/?_=${rnd}")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .check(status.is(200))
-        )
+        doIf(session => executeAjaxReview == 1) {
+          exec(
+            http("Product Page: Review AJAX")
+              .get(
+                "http://${domain}/review/product/listAjax/id/"+productId
+                  + "/" + ( if (isAjaxReviewRandomParam) { "?_=${rnd}" } else { "" } )
+              )
+              .header("X-Requested-With", "XMLHttpRequest")
+              .check(status.is(200)
+            )
+          )
+        }
       }
 
       /**
@@ -244,9 +295,19 @@ class frontendLoadTest extends Simulation
             http("Category Page")
               .get("http://${domain}/${url}")
               .check(status.is(200))
+              .check(currentLocation.saveAs("categoryUrl"))
           )
         )
       }
+
+      def back = {
+        exec(
+          http("Category Page")
+            .get("${categoryUrl}")
+            .check(status.is(200))
+        )
+      }
+
       def layer = {
         feed(feedLayer)
         .exec(
@@ -254,6 +315,7 @@ class frontendLoadTest extends Simulation
             .get("http://${domain}/${url}?${attribute}=${option}")
             .check(status.is(200))
             .check(regex("""<span>Remove This Item</span>""").find(0).exists)
+            .check(currentLocation.saveAs("categoryUrl"))
         )
       }
     }
@@ -389,6 +451,7 @@ class frontendLoadTest extends Simulation
             .check(jsonPath("$..carrier_code"))
         )
       }
+
       def setEmail = {
         exec(session => {
           val uuid = java.util.UUID.randomUUID.toString
@@ -406,23 +469,59 @@ class frontendLoadTest extends Simulation
             .check(regex("""true"""))
         )
       }
-      def saveShipping = {
+
+      def prepareAddress = {
         feed(feedAddress)
-        .exec(session => {
-          val address = "{\"city\":" + ajax.quoteJsonValue(session("city").as[String]) +
-            ",\"company\":\"\",\"countryId\":\"US\",\"firstname\":" + ajax.quoteJsonValue(session("firstname").as[String]) +
+      }
+
+      def estimateFullShippingMethod() = {
+        exec(session => {
+          val address = if (isAjaxReviewRandomParam) {
+            "\"country_id\":\"US\",\"postcode\":" +
+              ajax.quoteJsonValue(session("postcode").as[String]) +
+              ",\"region\":" + ajax.quoteJsonValue(session("region").as[String]) +
+              ",\"region_id\":" + ajax.quoteJsonValue(session("region_id").as[String])
+          } else {
+            "\"city\":" + ajax.quoteJsonValue(session("city").as[String]) +
+            ",\"company\":\"\",\"countryId\":\"US\",\"firstname\":" +
+            ajax.quoteJsonValue(session("firstname").as[String]) +
             ",\"lastname\":" + ajax.quoteJsonValue(session("lastname").as[String]) +
             ",\"postcode\":" + ajax.quoteJsonValue(session("postcode").as[String]) +
             ",\"region\":" + ajax.quoteJsonValue(session("region").as[String]) +
             ",\"regionId\":" + ajax.quoteJsonValue(session("region_id").as[String]) +
             ",\"street\":[" + ajax.quoteJsonValue(session("street").as[String]) +
             "],\"telephone\":" + ajax.quoteJsonValue(session("telephone").as[String])
-          val payload = "{\"addressInformation\":{\"shipping_address\":" + address + "},\"billing_address\":" +
-            address + ",\"saveInAddressBook\":false},\"shipping_carrier_code\":\"flatrate\"," +
-            "\"shipping_method_code\":\"flatrate\"}}"
+          }
 
-          session.set("payload", payload)
+          session.set("payload", "{\"address\":{" + address + "}}")
         })
+        .exec(
+          http("Checkout: Estimate Shipping")
+            .post("${secure}://${domain}/rest/default/V1/guest-carts/${quoteEntityId}/estimate-shipping-methods")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Content-Type", "application/json")
+            .body(StringBody("""${payload}""")).asJSON
+            .check(status.is(200))
+            .check(jsonPath("$..carrier_code"))
+        )
+      }
+
+      def saveShipping = {
+        exec(session => {
+            val address = "{\"city\":" + ajax.quoteJsonValue(session("city").as[String]) +
+              ",\"company\":\"\",\"countryId\":\"US\",\"firstname\":" + ajax.quoteJsonValue(session("firstname").as[String]) +
+              ",\"lastname\":" + ajax.quoteJsonValue(session("lastname").as[String]) +
+              ",\"postcode\":" + ajax.quoteJsonValue(session("postcode").as[String]) +
+              ",\"region\":" + ajax.quoteJsonValue(session("region").as[String]) +
+              ",\"regionId\":" + ajax.quoteJsonValue(session("region_id").as[String]) +
+              ",\"street\":[" + ajax.quoteJsonValue(session("street").as[String]) +
+              "],\"telephone\":" + ajax.quoteJsonValue(session("telephone").as[String])
+            val payload = "{\"addressInformation\":{\"shipping_address\":" + address + "},\"billing_address\":" +
+              address + ",\"saveInAddressBook\":null},\"shipping_carrier_code\":\"flatrate\"," +
+              "\"shipping_method_code\":\"flatrate\"}}"
+
+            session.set("payload", payload)
+          })
         .exec(
           http("Checkout: Save Shipping Address")
             .post("${secure}://${domain}/rest/default/V1/guest-carts/${quoteEntityId}/shipping-information")
@@ -443,7 +542,7 @@ class frontendLoadTest extends Simulation
             ",\"regionId\":" + ajax.quoteJsonValue(session("region_id").as[String]) +
             ",\"street\":[" + ajax.quoteJsonValue(session("street").as[String]) +
             "],\"telephone\":" + ajax.quoteJsonValue(session("telephone").as[String]) +
-            ",\"saveInAddressBook\":false}"
+            ",\"saveInAddressBook\":null}"
           val payload = "{\"billingAddress\":" + address +
             ",\"cartId\":" + ajax.quoteJsonValue(session("quoteEntityId").as[String]) +
             ",\"email\":" + ajax.quoteJsonValue(session("customerEmail").as[String]) +
@@ -467,89 +566,115 @@ class frontendLoadTest extends Simulation
             .check(status.is(200))
             .check(regex("""Your order # is:"""))
         )
-        .exec(ajax.loadSections("", true))
+        .exec(ajax.loadSections("cart%2Cmessages", true))
       }
+    }
+  }
+
+  object catalogBehaviour
+  {
+    def browseCategory = {
+      exec(initSession)
+        .exec(cms.homepage)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.view)
+    }
+
+    def browseCatalog = {
+      exec(browseCategory)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewConfigurable)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.back)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewSimple)
+    }
+
+    def browseLayer = {
+      exec(browseCategory)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.layer)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewConfigurable)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.back)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.viewSimple)
     }
   }
 
   /**
     * Customer behaviors
     */
-  object group {
-    def minPause = 100 milliseconds
-    def maxPause = 500 milliseconds
-
-    def abandonedCart = {
-      exec(initSession)
-      .exec(cms.homepage)
-      .pause(minPause, maxPause)
-      .exec(catalog.category.view)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.addSimple)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.addConfigurable)
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.view)
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.totalsInformation("", "", "0"))
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.estimateShippingMethods("","","0"))
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.totalsInformation("", "", "0"))
-    }
-
-    def browseCatalog = {
-      exec(initSession)
-      .exec(cms.homepage)
-      .pause(minPause, maxPause)
-      .exec(catalog.category.view)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.viewSimple)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.viewConfigurable)
-    }
-
-    def browseLayer = {
+  object checkoutBehaviour {
+    def abandonedCartSimpleAndConfigurable = {
       exec(initSession)
         .exec(cms.homepage)
         .pause(minPause, maxPause)
         .exec(catalog.category.view)
         .pause(minPause, maxPause)
-        .exec(catalog.category.layer)
+        .exec(catalog.product.addSimple)
+        // In order to add second product
+        // a user must go to a category page,
+        // as he stays in shopping cart
         .pause(minPause, maxPause)
-        .exec(catalog.product.viewSimple)
+        .exec(catalog.category.back)
         .pause(minPause, maxPause)
-        .exec(catalog.product.viewConfigurable)
+        .exec(catalog.product.addConfigurable)
     }
 
-    def checkoutGuest = {
+    def abandonedCartTwoSimples = {
       exec(initSession)
-      .exec(cms.homepage)
-      .pause(minPause, maxPause)
-      .exec(catalog.category.view)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.addSimple)
-      .pause(minPause, maxPause)
-      .exec(catalog.product.addConfigurable)
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.view)
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.totalsInformation("", "", "0"))
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.estimateShippingMethods("","","0"))
-      .pause(minPause, maxPause)
-      .exec(checkout.cart.totalsInformation("", "", "0"))
-      .pause(minPause, maxPause)
-      .exec(checkout.onepage.view)
-      .exec(checkout.onepage.estimateShippingMethods("","","0"))
-      .pause(minPause, maxPause)
-      .exec(checkout.onepage.setEmail)
-      .exec(checkout.onepage.isEmailAvailable)
-      .pause(minPause, maxPause)
-      .exec(checkout.onepage.saveShipping)
-      .pause(minPause, maxPause)
-      .exec(checkout.onepage.placeOrder)
-      .exec(checkout.onepage.success)
+        .exec(cms.homepage)
+        .pause(minPause, maxPause)
+        .exec(catalog.category.view)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.addSimple)
+        // In order to add second product
+        // a user must go to a category page,
+        // as he stays in shopping cart
+        .pause(minPause, maxPause)
+        .exec(catalog.category.back)
+        .pause(minPause, maxPause)
+        .exec(catalog.product.addSimple)
+    }
+
+    def abandonedCartMajority = {
+      exec(abandonedCartTwoSimples)
+    }
+
+    def abandonedCartMinority = {
+      exec(abandonedCartSimpleAndConfigurable)
+    }
+
+    def checkoutGuestMajority = {
+      exec(abandonedCartMajority)
+        .pause(minPause, maxPause)
+        .exec(checkoutFlow)
+    }
+
+    def checkoutGuestMinority = {
+      exec(abandonedCartMinority)
+        .pause(minPause, maxPause)
+        .exec(checkoutFlow)
+    }
+
+
+    def checkoutFlow = {
+      exec(checkout.onepage.view)
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.estimateShippingMethods("", "", "0"))
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.setEmail)
+        .exec(checkout.onepage.isEmailAvailable)
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.prepareAddress)
+        .exec(checkout.onepage.estimateFullShippingMethod())
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.saveShipping)
+        .pause(minPause, maxPause)
+        .exec(checkout.onepage.placeOrder)
+        .exec(checkout.onepage.success)
     }
   }
 
@@ -560,10 +685,12 @@ class frontendLoadTest extends Simulation
     def default = scenario(projectName + " Load Test" + scenarioSuffix)
       .during(nbDuring minutes) {
         randomSwitch(
-          40d -> exec(group.abandonedCart),
-          25d -> exec(group.browseCatalog),
-          25d -> exec(group.browseLayer),
-          10d  -> exec(group.checkoutGuest)
+          minorityCartPercent -> exec(checkoutBehaviour.abandonedCartMinority),
+          majorityCartPercent -> exec(checkoutBehaviour.abandonedCartMajority),
+          25d -> exec(catalogBehaviour.browseCatalog),
+          25d -> exec(catalogBehaviour.browseLayer),
+          minorityCheckoutPercent -> exec(checkoutBehaviour.checkoutGuestMinority),
+          majorityCheckoutPercent -> exec(checkoutBehaviour.checkoutGuestMajority)
         )
       }
   }

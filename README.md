@@ -1,38 +1,118 @@
 # Load Test Scenarios for Magento 1 and Magento 2
 
-These scenarios were used to perform load tests for Magento 1 and Magento 2 applications in different environments.
-Results are publicly available on [MageCore blog](https://www.magecore.com/blog):
+These test scenarios are more proper version of performance benchmark than the one that was performed by MageCore Inc.
 
-- [Magento CE 1.9 vs Magento CE 2.0 Performance Comparison](https://www.magecore.com/blog/news/magento-ce-1-9-vs-magento-ce-2-0-performance-comparison)
-- [How Does PHP 7 Affects Performance of Magento 1.9 CE vs. Magento 2.0 CE](https://www.magecore.com/blog/news/php-7-affects-performance-magento-1-9-ce-vs-magento-2-0-ce)
+You can find original test scenarios at the following repository with the links to original research:
+[https://github.com/magecorelab/magento-load-test](https://github.com/magecorelab/magento-load-test)
 
 ## Repository Structure
 
-Tests are grouped in application folders which include following assets:
-- ``media`` - image files used for catalog products
-- ``media.sh`` - script that initializes application media based on catalog and images from media folder
-- ``data.sql.gz`` - database dump
-- ``gatling`` - load test scenarios for [Gatling](http://gatling.io/) load testing framework
+This reposistory contains only simulations and data source for load tests, not actual Magento instances.
 
 ## Environment Configuration
 
-- OS: Amazon Linux AMI 2015.03
-- Web server: nginx/1.8.0 + php-fpm
-- PHP: 5.5.30 or 7.0.3
-- Varnish: 3.0.5
-- Redis: 3.0.5
-- Database: MySQL 5.6.27
+[Byte Hypernode GO BIG XL](https://www.byte.nl/hosting/magento/prijzen)
 
-## Setup instructions
+* OS: Ubuntu 12.04.5 LTS
+* Web server: nginx/1.9.7
+* PHP: 7.0.6 (over FPM)
+* Varnish: 4.0.3
+* Redis: 2.8.9
+* Database: Percona Server 5.6.22-71.0-log
+* RAM: 16GB
+* CPU: 8
 
-- Create database and import dump from ``data.sql.gz`` of proper application
-- Install Magento application using database created on the previous step
-- Copy ``media`` directory, ``media.set`` and ``media.sh`` script to some directory
-- Run ``media.sh /path/to/magento_pub /path/to/media.set /path/to/source_media`` to initialize product images
-- [Install](http://gatling.io/docs/2.2.0/quickstart.html#installing) Gatling
-- Copy files from `magento1/gatling` and `magento2/gatling` directories to gatling `user-files` directory
-- Run gatling scenario using following options (please use m1 or m2 instead mX in the parameters bellow):
+InnoDB configurations:
 
+```
+[mysqld]
+innodb_buffer_pool_size = 8G
+```
+
+## Setup Instructions Magento 1.x Server
+
+1. Clone repository with [Magento 1.x setup bootstrap](https://github.com/IvanChepurnyi/load-test-magento1-bootstrap) into your Hypernode:
+```console
+git clone https://github.com/IvanChepurnyi/load-test-magento1-bootstrap.git ./magento1
+```
+
+2. Install Magento 1.9.2.4 via `setup.sh` script
+
+```console
+magento1/setup.sh database_name magento-domain-name.com [database-type] [version]
+```
+
+* `database-type` is a type of database (large, original). Optional. By default it will use one with more configurables.
+* `version` Magento 1.x version number. Optional. By default it will use `1.9.2.4`.
+
+
+## Setup Instructions Magento 2.x Server
+
+
+1. Clone repository with [Magento 2.x setup bootstrap](https://github.com/IvanChepurnyi/load-test-magento2-bootstrap) into your Hypernode:
+```console
+git clone https://github.com/IvanChepurnyi/load-test-magento2-bootstrap.git ./magento2
+```
+
+2. Install desired version of Magento 2.x via `setup.sh` script
+
+```console
+magento2/setup.sh database_name magento-domain-name.com [version] [database-type]
+```
+
+* `database-type` is a type of database (large, original). Optional. By default it will use one with more configurables.
+* `version` Magento 2.x version number. Optional. By default it will use `latest` (currently 2.1.0).
+
+## Running Tests
+
+1. Copy contents from `gatling` directory in this repository into your gatling `user-files` directory
+```console
+cp -r ./gatling/* [path-to-gatling]/user-files/
+```
+
+2. Run load test sessions with the following commands:
+
+```console
+cd [path-to-gatling]/
+
+# Magento 1 Default Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -Dusers=10"
+gatling -s m1.defaultFrontTest
+
+# Magento 1 Large Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DsimpleProductCsv=product_simple_large -Dusers=10"
+gatling -s m1.defaultFrontTest
+
+# Magento 1 Original Oro Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DsimpleProductCsv=product_simple_large -Dusers=10"
+gatling -s m1.defaultFrontTest
+
+# Magento 2.0.7 Default Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DmagentoVersion=2.0.7 -Dusers=10"
+gatling -s m2.defaultFrontTest
+
+# Magento 2.0.7 Large Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DmagentoVersion=2.0.7 -DsimpleProductCsv=product_simple_large -Dusers=10"
+gatling -s m2.defaultFrontTest
+
+# Magento 2.0.7 Original Oro Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DmagentoVersion=2.0.7 -DsimpleProductCsv=product_simple_large -Dusers=10"
+gatling -s m2.defaultFrontTest
+
+# Magento 2.1.0 Default Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DmagentoVersion=2.1.0 -Dusers=10"
+gatling -s m2.defaultFrontTest
+
+# Magento 2.1.0 Large Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DmagentoVersion=2.1.0 -DsimpleProductCsv=product_simple_large -Dusers=10"
+gatling -s m2.defaultFrontTest
+
+# Magento 2.1.0 Original Oro Database
+JAVA_OPTS="-Ddomain=magento-domain-name.com -DmagentoVersion=2.1.0 -DsimpleProductCsv=product_simple_large -Dusers=10"
+gatling -s m2.defaultFrontTest
+```
+
+### Test Parameters Applicable for both load tests
 | Option | Description | Default Value |
 | --- | --- | --- |
 | dataDir | Data directory used in test scenarios | mXce |
@@ -42,23 +122,10 @@ Tests are grouped in application folders which include following assets:
 | domain | Testing domain name | magento.test.com |
 | useSecure | Use HTTPS for secure pages | 0 |
 | project | Project Name for Report | Magento |
+| simpleProductCsv | CSV File name (without suffix) | simple_product |
 
-```console
-$ JAVA_OPTS="-Ddomain=www.mXce.com -Dusers=10"
-$ gatling -s mX.defaultFrontTest
-```
-
-## Magento1 Pre Test Setup
-
-1. Install Phoenix_VarnishCache extension
-2. Install Oro_Ajax module from ``magento1/ajax`` directory
-
-## Magento2 Pre Test Setup
-
-1. Page load time optimization: build JS, enable JS minification, enable CSS minification
-2. Deploy static content: ``php bin/magento setup:static-content:deploy``
-3. Run compiler: ``php bin/magento setup:di:compile``
-4. Enable production mode: ``Set $MAGE_MODE production`` 
-5. Reindex catalog: ``php bin/magento indexer:reindex``
-6. Clean cache: ``php bin/magento cache:clean``
+### Magento 2.x Specific parameters
+| Option | Description | Default Value |
+| --- | --- | --- |
+| magentoVersion | Magento 2.x Version under test | 2.0.7 |
 
