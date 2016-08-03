@@ -25,7 +25,7 @@ class warmUpTest extends Simulation {
   val feedProductSimple = csv(dataDir + "/" + simpleProductCsv + ".csv").circular
   val numberOfConfigurables = feedProductConfigurable.records.length
   val numberOfSimple = feedProductSimple.records.length
-  val ratioSimpleToConfirable = 0.2d
+  val ratioSimpleToConfirable = 0.4d
   val numberOfUsersForConfigurable = (nbUsers * ratioSimpleToConfirable).toInt
   val numberOfUsersForSimple = nbUsers - numberOfUsersForConfigurable
 
@@ -71,7 +71,7 @@ class warmUpTest extends Simulation {
   object Scenario {
 
     def configurable = repeat(
-      (numberOfSimple / numberOfUsersForSimple).toInt + 1, "configurablePages"
+      (numberOfConfigurables / numberOfUsersForConfigurable).toInt + 1, "configurablePages"
     ) {
       exec(Catalog.viewConfigurableProduct)
         .pause(
@@ -89,7 +89,7 @@ class warmUpTest extends Simulation {
     }
 
     def simple = repeat(
-      (numberOfConfigurables / numberOfUsersForConfigurable).toInt + 1, "configurablePages"
+      (numberOfSimple / numberOfUsersForSimple).toInt + 1, "simplePages"
     ) {
       exec(Catalog.viewSimpleProduct)
         .pause(
