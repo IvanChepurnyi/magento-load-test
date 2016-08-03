@@ -70,7 +70,15 @@ magento2/setup.sh database_name magento-domain-name.com [version] [database-type
 cp -r ./gatling/* [path-to-gatling]/user-files/
 ```
 
-2. Run load test sessions with the following commands:
+2. Pre-warm image cache for each of your instances under test:
+
+```console
+# Warming up image cache with 10 concurrent users
+JAVA_OPTS="-Ddomain=magento-domain-name.com -Dusers=10"
+gatling -s base.defaultFrontTest
+```
+
+3. Run load test sessions with the following commands:
 
 ```console
 cd [path-to-gatling]/
@@ -127,5 +135,5 @@ gatling -s m2.defaultFrontTest
 ### Magento 2.x Specific parameters
 | Option | Description | Default Value |
 | --- | --- | --- |
-| magentoVersion | Magento 2.x Version under test | 2.0.7 |
+| magentoVersion | Magento 2.x Version under test | latest |
 
