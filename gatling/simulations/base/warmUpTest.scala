@@ -16,7 +16,11 @@ class warmUpTest extends Simulation {
     .acceptHeader("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
     .acceptEncodingHeader("gzip,deflate,sdch")
     .acceptLanguageHeader("en-US,en;q=0.8")
-    .baseURL((if (useSecure > 0) { "https://" } else { "http://" }) + domain + "/")
+    .baseURL((if (useSecure > 0) {
+      "https://"
+    } else {
+      "http://"
+    }) + domain + "/")
     .disableFollowRedirect
 
   val simpleProductCsv = System.getProperty("simpleProductCsv", "product_simple").toString
@@ -99,8 +103,8 @@ class warmUpTest extends Simulation {
     }
 
     val scenarioCategoryBrowser = scenario("Category Browser").exec(CMS.homepage)
-        .exec(CMS.homepage)
-        .exec(category)
+      .exec(CMS.homepage)
+      .exec(category)
 
     val scenarioConfigurableProductBrowser = scenario("Configurable Product Browser").exec(configurable)
 
