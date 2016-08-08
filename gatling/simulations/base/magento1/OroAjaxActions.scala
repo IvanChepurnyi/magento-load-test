@@ -12,14 +12,19 @@ import io.gatling.http.request.builder.HttpRequestBuilder
 class OroAjaxActions(commonBehaviour: CommonBehaviour) {
 
   def statusRequest(page: String): ChainBuilder = {
-      exec(commonBehaviour.refreshRandom())
-        .exec(
-          commonBehaviour.visitPage("ORO AJAX: Status Request", "ajax/status/index/page/" + page + "/?_=${rnd}")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .check(status.is(200))
-            .check(jsonPath("$.customer"))
-            .check(jsonPath("$.form_key").saveAs("form_key"))
-        )
+    var url = "ajax/status/index?_=${rnd}"
+    if (page != "") {
+      url += "ajax/status/index"
+    }
+
+    exec(commonBehaviour.refreshRandom())
+      .exec(
+        commonBehaviour.visitPage("ORO AJAX: Status Request", "ajax/status/index/page/" + page + "/?rnd=${rnd}")
+          .header("X-Requested-With", "XMLHttpRequest")
+          .check(status.is(200))
+          .check(jsonPath("$.customer"))
+          .check(jsonPath("$.form_key").saveAs("form_key"))
+      )
   }
 
   def validateAddToCart = (requestBuilder: HttpRequestBuilder) => {
@@ -30,7 +35,8 @@ class OroAjaxActions(commonBehaviour: CommonBehaviour) {
   def catalogCallbacks: Map[String, (String) => ChainBuilder] = {
     Map(
       "category_after" -> createCallback("", statusRequest("catalog_category/category/${category_id}")),
-      "product_after" -> createCallback("", statusRequest("catalog_product/product/${product_id}"))
+      "product_after" -> createCallback("", statusRequest("catalog_product/product/${product_id}")),
+      "home_after" -> createCallback("", statusRequest(""))
     )
   }
 

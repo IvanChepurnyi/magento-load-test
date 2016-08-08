@@ -44,7 +44,9 @@ class CommonBehaviour(val simulation: MagentoSimulation) {
   }
 
   def refreshRandom(): ChainBuilder = {
-    exec(session => session.set("rnd", randomGenerator.nextInt()))
+    exec(session => {
+      session.set("rnd", s"${System.currentTimeMillis}.${randomGenerator.nextInt(Integer.MAX_VALUE)}")
+    })
   }
 
   def updateDefaultProtocol(): ChainBuilder = {

@@ -17,26 +17,27 @@ class CatalogActions(addReview: Boolean, isRandomAddedToReview: Boolean, commonB
     callbacks
   ) {
 
-  var reviewUrl = "review/product/listAjax/id/${product_id}/"
+  def reviewUrl: String = {
+    if (isRandomAddedToReview) {
+      return "review/product/listAjax/id/${product_id}/?_=${rnd}"
+    }
 
-  if (isRandomAddedToReview) {
-    reviewUrl = reviewUrl + "?_=${rnd}"
+    "review/product/listAjax/id/${product_id}/"
   }
+
 
   override def viewProduct(typeCode: String): ChainBuilder = {
     var result = super.viewProduct(typeCode)
 
     if (addReview) {
-      return reviewAjax(result)
+      return exec(result).exec(reviewAjax)
     }
 
     result
   }
 
-  def reviewAjax(chainBuilder: ChainBuilder): ChainBuilder = {
-    chainBuilder
-      .exec(commonBehaviour.updateDefaultProtocol())
-      .exec(commonBehaviour.refreshRandom())
+  def reviewAjax: ChainBuilder = {
+    exec(commonBehaviour.refreshRandom())
       .exec(
         commonBehaviour
           .visitPage("Product Page: Review AJAX", reviewUrl)

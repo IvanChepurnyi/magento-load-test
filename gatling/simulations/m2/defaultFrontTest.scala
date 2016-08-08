@@ -15,22 +15,28 @@ class defaultFrontTest extends MagentoSimulation {
     exec(super.initSession).exec(ajaxActions.addFormKey())
   }
 
-  def magentoVersion = System.getProperty("magentoVersion", "2.0.7").toString
-
-  val isAjaxReviewRandomParam = magentoVersion match {
-    case "2.0.0" => true
-    case "2.0.1" => true
-    case "2.0.2" => true
-    case "2.0.3" => true
-    case "2.0.4" => true
-    case "2.0.5" => true
-    case "2.0.6" => true
-    case "2.0.7" => true
-    case "2.1.0" => false
-    case _ => false
+  def magentoVersion: String = {
+    System.getProperty("magentoVersion", "2.0.7").toString
   }
 
-  val executeAjaxReview = System.getProperty("ajaxReview", "1").toInt
+  def isAjaxReviewRandomParam: Boolean = {
+    magentoVersion match {
+      case "2.0.0" => true
+      case "2.0.1" => true
+      case "2.0.2" => true
+      case "2.0.3" => true
+      case "2.0.4" => true
+      case "2.0.5" => true
+      case "2.0.6" => true
+      case "2.0.7" => true
+      case "2.1.0" => false
+      case _ => false
+    }
+  }
+
+  def executeAjaxReview:Int = {
+    System.getProperty("ajaxReview", "1").toInt
+  }
 
   override def projectName: String = {
     "Magento " + magentoVersion + " CE"
@@ -42,7 +48,7 @@ class defaultFrontTest extends MagentoSimulation {
   }
 
   override def checkoutActions: AbstractCheckoutActions = new CheckoutActions(
-    commonBehaviour, feedProvider, isAjaxReviewRandomParam, ajaxActions.checkoutCallbacks
+    commonBehaviour, feedProvider, !isAjaxReviewRandomParam, ajaxActions.checkoutCallbacks
   )
 
   override def catalogActions: AbstractCatalogActions = new CatalogActions(

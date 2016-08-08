@@ -103,7 +103,7 @@ abstract class MagentoSimulation extends Simulation
 
   def startBrowsing(): ChainBuilder = {
     exec(initSession)
-      .exec(commonBehaviour.visitHomePage())
+      .exec(catalogActions.viewHomepage())
       .pause(minPause, maxPause)
       .exec(catalogActions.viewCategoryRegular())
   }

@@ -28,7 +28,7 @@ class SessionAddress(session: Session, countryId: String = "US", company: String
     "city" -> session("city").as[String],
     "country_id" -> countryId,
     "company" -> company,
-    "saveInAddressBook" -> false
+    "saveInAddressBook" -> 0
   )
 
   val shortAddress : Map[String, Any] = Map(

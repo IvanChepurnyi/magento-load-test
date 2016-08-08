@@ -29,6 +29,18 @@ InnoDB configurations:
 innodb_buffer_pool_size = 8G
 ```
 
+PHP Op Cache configurations:
+```
+[opcache]
+opcache.revalidate_freq=0
+opcache.validate_timestamps=0
+opcache.max_accelerated_files=32531
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.fast_shutdown=1
+opcache.max_wasted_percentage=30
+```
+
 ## Setup Instructions Magento 1.x Server
 
 1. Clone repository with [Magento 1.x setup bootstrap](https://github.com/IvanChepurnyi/load-test-magento1-bootstrap) into your Hypernode:
@@ -129,7 +141,6 @@ gatling -s m2.defaultFrontTest
 | during | Run test during period, minutes | 10 |
 | domain | Testing domain name | magento.test.com |
 | useSecure | Use HTTPS for secure pages | 0 |
-| project | Project Name for Report | Magento |
 | simpleProductCsv | CSV File name (without suffix) | simple_product |
 
 ### Magento 2.x Specific parameters

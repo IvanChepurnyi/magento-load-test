@@ -33,6 +33,16 @@ abstract class AbstractCatalogActions(commonBehaviour: CommonBehaviour,
       )
   }
 
+  def viewHomepage(): ChainBuilder = {
+    execInCallback(
+      "home",
+      "page",
+      exec(
+        commonBehaviour.visitHomePage()
+      )
+    )
+  }
+
   def viewSimpleProduct(): ChainBuilder = {
     viewProduct("simple")
   }

@@ -1,4 +1,4 @@
-package m1
+package m1opt
 
 import base._
 import base.magento1._
@@ -8,7 +8,7 @@ import io.gatling.core.structure.ChainBuilder
 class defaultFrontTest extends MagentoSimulation {
 
   def ecomdevAjaxActions: EcomDevVarnishActions = {
-    new EcomDevVarnishActions(commonBehaviour, "minicart_head", true)
+    new EcomDevVarnishActions(commonBehaviour, "minicart_head", false)
   }
 
   override def initSession: ChainBuilder = {
