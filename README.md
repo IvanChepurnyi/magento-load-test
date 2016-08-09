@@ -11,7 +11,7 @@ This reposistory contains only simulations and data source for load tests, not a
 
 ## Environment Configuration
 
-[Byte Hypernode GO BIG XL](https://www.byte.nl/hosting/magento/prijzen)
+[Byte Hypernode GO BIG L](https://www.byte.nl/hosting/magento/prijzen)
 
 * OS: Ubuntu 12.04.5 LTS
 * Web server: nginx/1.9.7
