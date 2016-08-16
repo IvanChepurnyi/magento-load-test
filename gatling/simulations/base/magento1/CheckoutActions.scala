@@ -138,32 +138,28 @@ class CheckoutActions(commonBehaviour: CommonBehaviour,
         execInCallback("onepage", "view", exec(commonBehaviour.visitPage("Checkout: Onepage", "checkout/onepage/")))
       )
       .pause(minPause, maxPause)
-      .exec(setCheckoutMethod("guest"))
-      .exitHereIfFailed
-      .exec(progress("billing"))
-      .pause(minPause, maxPause)
-      .exec(saveBillingAddressAsShipping)
-      .exitHereIfFailed
-      // This request chain was missing in original benchmark
-      .exec(shippingMethodGetAdditional)
-      .exitHereIfFailed
-      .exec(progress("billing"))
-      .exec(progress("shipping"))
-      // End of missing requests
-      .pause(minPause, maxPause)
-      .exec(saveShippingMethod("flatrate_flatrate"))
-      .exitHereIfFailed
-      .exec(progress("shipping_method"))
-      // This request was missing in original benchmark
-      .exec(progress)
-      // End of missing requests
-      .pause(minPause, maxPause)
-      .exec(savePayment("checkmo"))
-      .exitHereIfFailed
-      .exec(progress("payment"))
-      .pause(minPause, maxPause)
-      .exec(placeOrder("checkmo"))
-      .exitHereIfFailed
-      .exec(success)
+      .exitBlockOnFail {
+        exec(setCheckoutMethod("guest"))
+          .exec(progress("billing"))
+          .pause(minPause, maxPause)
+          .exec(saveBillingAddressAsShipping)
+          // This request chain was missing in original benchmark
+          .exec(shippingMethodGetAdditional)
+          .exec(progress("billing"))
+          .exec(progress("shipping"))
+          // End of missing requests
+          .pause(minPause, maxPause)
+          .exec(saveShippingMethod("flatrate_flatrate"))
+          .exec(progress("shipping_method"))
+          // This request was missing in original benchmark
+          .exec(progress)
+          // End of missing requests
+          .pause(minPause, maxPause)
+          .exec(savePayment("checkmo"))
+          .exec(progress("payment"))
+          .pause(minPause, maxPause)
+          .exec(placeOrder("checkmo"))
+          .exec(success)
+      }
   }
 }
