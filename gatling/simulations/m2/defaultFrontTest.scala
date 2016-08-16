@@ -29,6 +29,8 @@ class defaultFrontTest extends MagentoSimulation {
       case "2.0.5" => true
       case "2.0.6" => true
       case "2.0.7" => true
+      case "2.0.8" => true
+      case "2.0.9" => true
       case "2.1.0" => false
       case _ => false
     }
